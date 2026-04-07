@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Pipeline</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-alt: #1f2937;
+      --border: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-strong: #0ea5e9;
+      --success: #34d399;
+      --error: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #020617 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .app-shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+    }
+
+    .top-bar {
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .upload-zone {
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.65);
+      display: grid;
+      gap: 12px;
+      text-align: center;
+    }
+
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    input[type="text"] {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-size: 15px;
+    }
+
+    button {
+      background: var(--accent);
+      color: #082f49;
+      padding: 12px 18px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent-strong);
+      color: #e0f2fe;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: transparent;
+      color: var(--text);
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    .chat-panel {
+      min-height: 60vh;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      overflow: hidden;
+    }
+
+    .messages {
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+      overflow-y: auto;
+      max-height: 65vh;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .message.user {
+      margin-left: auto;
+      background: rgba(14, 165, 233, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .message.assistant {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .message.system {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      color: var(--muted);
+      max-width: 100%;
+    }
+
+    .message.error {
+      background: rgba(127, 29, 29, 0.25);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      color: #fecaca;
+      max-width: 100%;
+    }
+
+    .meta {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(148, 163, 184, 0.16);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .composer {
+      border-top: 1px solid var(--border);
+      padding: 16px 20px 20px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .composer input {
+      flex: 1;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      padding: 12px 14px;
+    }
+
+    .source-list {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      .app-shell {
+        padding: 16px;
+      }
+
+      .message {
+        max-width: 100%;
+      }
+
+      .composer {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <section class="card top-bar">
+      <div class="title-row">
+        <div>
+          <h1 style="margin: 0 0 6px;">RAG Pipeline</h1>
+          <div class="helper">Upload PDFs, then ask grounded questions against the ingested corpus.</div>
+        </div>
+        <div class="status-pill" id="status-pill">Loading status...</div>
+      </div>
+
+      <div class="upload-zone" id="upload-zone">
+        <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden />
+        <strong>Drop PDF files here</strong>
+        <div class="helper" id="selected-files">No files selected.</div>
+        <div class="actions">
+          <button id="pick-files-btn" type="button">Choose Files</button>
+          <button id="upload-btn" type="button" class="secondary">Upload and Ingest</button>
+        </div>
+        <div class="helper" id="upload-status"></div>
+      </div>
+    </section>
+
+    <section class="card chat-panel">
+      <div class="messages" id="messages"></div>
+      <form class="composer" id="query-form">
+        <input
+          id="query-input"
+          type="text"
+          placeholder="Ask a question about the ingested documents..."
+          autocomplete="off"
+        />
+        <button id="send-btn" type="submit">Send</button>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      selectedFiles: [],
+      busy: false,
+    };
+
+    const elements = {
+      fileInput: document.getElementById("file-input"),
+      pickFilesBtn: document.getElementById("pick-files-btn"),
+      uploadBtn: document.getElementById("upload-btn"),
+      uploadZone: document.getElementById("upload-zone"),
+      selectedFiles: document.getElementById("selected-files"),
+      uploadStatus: document.getElementById("upload-status"),
+      statusPill: document.getElementById("status-pill"),
+      messages: document.getElementById("messages"),
+      queryForm: document.getElementById("query-form"),
+      queryInput: document.getElementById("query-input"),
+      sendBtn: document.getElementById("send-btn"),
+    };
+
+    function addMessage(text, role, meta = "") {
+      const wrapper = document.createElement("div");
+      wrapper.className = `message ${role}`;
+      wrapper.textContent = text;
+
+      if (meta) {
+        const metaNode = document.createElement("div");
+        metaNode.className = "meta";
+        metaNode.innerHTML = meta;
+        wrapper.appendChild(metaNode);
+      }
+
+      elements.messages.appendChild(wrapper);
+      elements.messages.scrollTop = elements.messages.scrollHeight;
+    }
+
+    function setBusy(nextBusy) {
+      state.busy = nextBusy;
+      elements.uploadBtn.disabled = nextBusy;
+      elements.pickFilesBtn.disabled = nextBusy;
+      elements.sendBtn.disabled = nextBusy;
+      elements.queryInput.disabled = nextBusy;
+    }
+
+    function updateSelectedFiles() {
+      if (!state.selectedFiles.length) {
+        elements.selectedFiles.textContent = "No files selected.";
+        return;
+      }
+      const names = state.selectedFiles.map((file) => file.name).join(", ");
+      elements.selectedFiles.textContent = `${state.selectedFiles.length} file(s): ${names}`;
+    }
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch("/status");
+        const data = await response.json();
+        elements.statusPill.textContent = `${data.ingested_files} file(s), ${data.total_chunks} chunk(s)`;
+      } catch (error) {
+        elements.statusPill.textContent = "Status unavailable";
+      }
+    }
+
+    function renderSources(sources, retrievalUsed) {
+      const sourceText = sources.length
+        ? sources.map((source) => `${source.filename} p.${source.page_number} c.${source.chunk_index}`).join("<br>")
+        : "No sources returned.";
+      return `
+        <div>Retrieval used: ${retrievalUsed ? "yes" : "no"}</div>
+        <div class="source-list">${sourceText}</div>
+      `;
+    }
+
+    async function uploadFiles() {
+      if (!state.selectedFiles.length || state.busy) {
+        return;
+      }
+
+      setBusy(true);
+      const total = state.selectedFiles.length;
+      const successes = [];
+      const failures = [];
+
+      for (let index = 0; index < total; index += 1) {
+        const file = state.selectedFiles[index];
+        elements.uploadStatus.textContent = `Processing file ${index + 1} of ${total}: ${file.name}`;
+
+        const formData = new FormData();
+        formData.append("files", file);
+
+        try {
+          const response = await fetch("/ingest", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            failures.push(file.name);
+            addMessage(
+              `${data.error_type || "ingestion_error"}: ${data.message || "Upload failed."}`,
+              "error",
+              data.details ? String(data.details) : ""
+            );
+            continue;
+          }
+
+          successes.push(file.name);
+          addMessage(
+            `Ingested ${file.name}.`,
+            "system",
+            `Stored chunks: ${data.chunk_count}<br>Errors: ${data.errors.length ? data.errors.join("<br>") : "None"}`
+          );
+        } catch (error) {
+          failures.push(file.name);
+          addMessage(`Upload failed for ${file.name}.`, "error", String(error));
+        }
+      }
+
+      elements.uploadStatus.textContent = `Completed. Success: ${successes.length}, Failed: ${failures.length}.`;
+      state.selectedFiles = [];
+      updateSelectedFiles();
+      elements.fileInput.value = "";
+      setBusy(false);
+      await refreshStatus();
+    }
+
+    async function submitQuery(event) {
+      event.preventDefault();
+      if (state.busy) {
+        return;
+      }
+
+      const query = elements.queryInput.value.trim();
+      if (!query) {
+        return;
+      }
+
+      addMessage(query, "user");
+      elements.queryInput.value = "";
+      setBusy(true);
+
+      try {
+        const response = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          addMessage(
+            `${data.error_type || "query_error"}: ${data.message || "Query failed."}`,
+            "error",
+            data.details ? String(data.details) : ""
+          );
+          return;
+        }
+
+        addMessage(
+          data.answer,
+          "assistant",
+          renderSources(data.sources || [], data.retrieval_used)
+        );
+      } catch (error) {
+        addMessage("The query could not be completed.", "error", String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    elements.pickFilesBtn.addEventListener("click", () => elements.fileInput.click());
+    elements.fileInput.addEventListener("change", (event) => {
+      state.selectedFiles = Array.from(event.target.files || []);
+      updateSelectedFiles();
+    });
+    elements.uploadBtn.addEventListener("click", uploadFiles);
+    elements.queryForm.addEventListener("submit", submitQuery);
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      elements.uploadZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        elements.uploadZone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      elements.uploadZone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        if (eventName === "drop") {
+          state.selectedFiles = Array.from(event.dataTransfer.files || []).filter(
+            (file) => file.name.toLowerCase().endsWith(".pdf")
+          );
+          updateSelectedFiles();
+        }
+        elements.uploadZone.classList.remove("dragover");
+      });
+    });
+
+    addMessage(
+      "Upload one or more PDFs to build the local retrieval store, then ask questions in the chat below.",
+      "system"
+    );
+    refreshStatus();
+  </script>
+</body>
+</html>
