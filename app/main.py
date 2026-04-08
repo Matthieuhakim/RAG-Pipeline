@@ -13,6 +13,7 @@ from app.models import ErrorResponse, IngestResponse, QueryRequest, QueryRespons
 from app.postprocessing import reciprocal_rank_fusion
 from app.query import answer_directly, detect_intent, transform_query
 from app.search import HybridSearchStore
+from bonus.similarity_threshold import INSUFFICIENT_EVIDENCE_MESSAGE, check_similarity_threshold
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 UI_PATH = ROOT_DIR / "ui" / "index.html"
@@ -167,9 +168,9 @@ async def query_documents(
             top_k=6,
         )
 
-        if not fused_results:
+        if not fused_results or not check_similarity_threshold(semantic_results):
             return QueryResponse(
-                answer="I could not find relevant information in the ingested documents.",
+                answer=INSUFFICIENT_EVIDENCE_MESSAGE,
                 sources=[],
                 retrieval_used=True,
             )
