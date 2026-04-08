@@ -13,6 +13,7 @@ from app.models import ErrorResponse, IngestResponse, QueryRequest, QueryRespons
 from app.postprocessing import reciprocal_rank_fusion
 from app.query import answer_directly, detect_intent, transform_query
 from app.search import HybridSearchStore
+from bonus.query_refusal import screen_query
 from bonus.similarity_threshold import INSUFFICIENT_EVIDENCE_MESSAGE, check_similarity_threshold
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -142,6 +143,10 @@ async def query_documents(
     query = payload.query.strip()
     if not query:
         return error_response(400, "validation_error", "Query must not be empty.")
+
+    refusal = screen_query(query)
+    if refusal.refused:
+        return error_response(400, "query_refused", refusal.message, details=refusal.reason)
 
     store: HybridSearchStore = request.app.state.search_store
 

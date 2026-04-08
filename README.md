@@ -283,6 +283,36 @@ The pipeline refuses to answer when the best retrieved chunk does not meet a min
 }
 ```
 
+### Query Refusal Policies (`bonus/query_refusal.py`)
+
+Screens every incoming query before any LLM call or retrieval. Three policy categories are enforced:
+
+- **PII detection:** Regex patterns catch email addresses, phone numbers, Social Security Numbers, and credit card numbers. Queries containing PII are immediately refused to protect user privacy.
+- **Legal advice:** Detects phrases like "can I sue", "legal advice", "am I liable". Returns a disclaimer directing the user to a qualified attorney.
+- **Medical advice:** Detects phrases like "should I take", "symptoms of", "is it safe to take". Returns a disclaimer directing the user to a healthcare professional.
+
+The patterns are deliberately scoped to avoid false positives on academic queries (e.g. "What does the paper say about diagnosis accuracy?" passes through).
+
+**Example response (PII refusal, HTTP 400):**
+
+```json
+{
+  "error_type": "query_refused",
+  "message": "Your query appears to contain personally identifiable information (PII). ...",
+  "details": "PII detected: email address"
+}
+```
+
+**Example response (medical refusal, HTTP 400):**
+
+```json
+{
+  "error_type": "query_refused",
+  "message": "Your query appears to request medical advice. I am an AI assistant and cannot provide medical diagnoses ...",
+  "details": "Medical advice request"
+}
+```
+
 ## Limitations and Future Improvements
 
 - Scanned PDFs without embedded text are not supported because there is no OCR step.
