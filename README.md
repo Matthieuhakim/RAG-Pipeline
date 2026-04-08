@@ -313,6 +313,27 @@ The patterns are deliberately scoped to avoid false positives on academic querie
 }
 ```
 
+### Hallucination Filter (`bonus/hallucination_filter.py`)
+
+A post-hoc evidence check that runs after the LLM generates an answer. Each sentence in the answer is embedded and compared (cosine similarity) against the source chunks that were provided as context. Sentences that lack support — i.e. whose best-matching chunk falls below a configurable threshold (default: 0.70) — are stripped from the response, and a warning is appended.
+
+**How it works:**
+1. Split the answer into sentences.
+2. Skip structural/meta sentences ("Based on the context...", "In summary...") — these don't make factual claims.
+3. Embed all remaining claim sentences in a single batch.
+4. For each claim, compute cosine similarity against all source chunk embeddings.
+5. If the best similarity is below the threshold, the sentence is unsupported and removed.
+6. If any sentences were removed, append a transparency warning to the answer.
+
+**Example (filtered answer):**
+
+```
+Monocrystalline panels offer 20-22% efficiency. A typical 6kW system uses 16-20 panels.
+
+[Note: Some parts of the original answer were removed because they could not be
+verified against the source documents.]
+```
+
 ## Limitations and Future Improvements
 
 - Scanned PDFs without embedded text are not supported because there is no OCR step.
