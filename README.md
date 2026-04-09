@@ -334,6 +334,22 @@ Monocrystalline panels offer 20-22% efficiency. A typical 6kW system uses 16-20 
 verified against the source documents.]
 ```
 
+### Answer Shaping (`bonus/answer_shaping.py`)
+
+Detects the user's intent from the query using regex heuristics and selects a matching system prompt that guides the LLM toward structured output. No extra LLM call is needed — classification is purely rule-based.
+
+**Supported shapes:**
+
+| Shape | Trigger examples | Output format |
+|---|---|---|
+| **List** | "List the methods", "What are the approaches?" | Numbered/bulleted list |
+| **Comparison** | "Compare A and B", "Pros and cons" | Table or side-by-side format |
+| **Summary** | "Summarize", "Key findings", "TL;DR" | 2-4 concise sentences |
+| **Definition** | "What is X?", "Define Y" | One-sentence definition + elaboration |
+| **General** | Everything else | Free-form grounded answer |
+
+Rules are checked in priority order (summary > comparison > list > definition) to handle overlapping patterns correctly. All prompts retain the grounding constraint ("Answer ONLY based on the provided context").
+
 ## Limitations and Future Improvements
 
 - Scanned PDFs without embedded text are not supported because there is no OCR step.

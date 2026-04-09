@@ -13,6 +13,7 @@ from app.models import ErrorResponse, IngestResponse, QueryRequest, QueryRespons
 from app.postprocessing import reciprocal_rank_fusion
 from app.query import answer_directly, detect_intent, transform_query
 from app.search import HybridSearchStore
+from bonus.answer_shaping import detect_answer_shape, get_system_prompt
 from bonus.hallucination_filter import filter_hallucinations
 from bonus.query_refusal import screen_query
 from bonus.similarity_threshold import INSUFFICIENT_EVIDENCE_MESSAGE, check_similarity_threshold
@@ -184,7 +185,12 @@ async def query_documents(
         selected_indices = [index for index, _ in fused_results]
         selected_chunks = [store.chunks[i] for i in selected_indices]
         selected_embeddings = store.embeddings[selected_indices]
-        answer, sources = await generate_grounded_answer(query, selected_chunks)
+
+        shape = detect_answer_shape(query)
+        system_prompt = get_system_prompt(shape)
+        answer, sources = await generate_grounded_answer(
+            query, selected_chunks, system_prompt=system_prompt,
+        )
 
         answer, _ = await filter_hallucinations(
             answer, selected_chunks, selected_embeddings,

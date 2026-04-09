@@ -202,6 +202,60 @@
       font-size: 13px;
     }
 
+    /* Markdown rendering inside assistant messages */
+    .message.assistant .md-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .message.assistant .md-content th,
+    .message.assistant .md-content td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    .message.assistant .md-content th {
+      background: rgba(56, 189, 248, 0.08);
+      font-weight: 600;
+    }
+
+    .message.assistant .md-content ul,
+    .message.assistant .md-content ol {
+      margin: 8px 0;
+      padding-left: 22px;
+    }
+
+    .message.assistant .md-content li {
+      margin-bottom: 4px;
+    }
+
+    .message.assistant .md-content p {
+      margin: 6px 0;
+    }
+
+    .message.assistant .md-content code {
+      background: rgba(148, 163, 184, 0.12);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .shape-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      margin-right: 8px;
+    }
+
     @media (max-width: 720px) {
       .app-shell {
         padding: 16px;
@@ -274,10 +328,96 @@
       sendBtn: document.getElementById("send-btn"),
     };
 
-    function addMessage(text, role, meta = "") {
+    /* ---- Lightweight Markdown renderer (no external deps) ---- */
+    function renderMarkdown(text) {
+      let html = text;
+      // Escape HTML entities first
+      html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      // Markdown tables
+      html = html.replace(
+        /^(\|.+\|)\n(\|[\s\-:|]+\|)\n((?:\|.+\|\n?)+)/gm,
+        (_, header, sep, body) => {
+          const ths = header.split("|").filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join("");
+          const rows = body.trim().split("\n").map(row => {
+            const tds = row.split("|").filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join("");
+            return `<tr>${tds}</tr>`;
+          }).join("");
+          return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+        }
+      );
+
+      // Headers
+      html = html.replace(/^#### (.+)$/gm, "<strong>$1</strong>");
+      html = html.replace(/^### (.+)$/gm, "<strong>$1</strong>");
+      html = html.replace(/^## (.+)$/gm, "<strong>$1</strong>");
+
+      // Bold
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+      // Italic
+      html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+      // Unordered lists (- or *)
+      html = html.replace(/^(\s*[-*])\s+(.+)$/gm, (_, bullet, content) => {
+        return `<li>${content}</li>`;
+      });
+      html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
+
+      // Numbered lists
+      html = html.replace(/^(\s*\d+\.)\s+(.+)$/gm, (_, num, content) => {
+        return `<oli>${content}</oli>`;
+      });
+      html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, (match) => {
+        return "<ol>" + match.replace(/<\/?oli>/g, (t) => t.replace("oli", "li")) + "</ol>";
+      });
+
+      // Paragraphs: convert double newlines
+      html = html.replace(/\n{2,}/g, "</p><p>");
+      html = "<p>" + html + "</p>";
+
+      // Clean up empty paragraphs
+      html = html.replace(/<p>\s*<\/p>/g, "");
+      // Don't wrap block elements in <p>
+      html = html.replace(/<p>\s*(<(?:table|ul|ol|li|h[1-6]))/g, "$1");
+      html = html.replace(/(<\/(?:table|ul|ol|li|h[1-6])>)\s*<\/p>/g, "$1");
+
+      return html;
+    }
+
+    /* ---- Detect answer shape from query (mirrors bonus/answer_shaping.py) ---- */
+    function detectShape(query) {
+      const q = query.toLowerCase();
+      if (/\b(summar|overview|main\s+(points?|findings?|takeaways?)|key\s+(points?|findings?|takeaways?)|tl;?\s*dr)\b/.test(q)) return "summary";
+      if (/\b(compar|differenc|differentiate|vs\.?|versus|pros?\s+(and|&)\s+cons?|trade[\s-]?offs?|advantages?\s+(and|over))\b/.test(q)) return "comparison";
+      if (/\b(list|enumerate|what\s+are\s+(the|all|some)|name\s+(the|all|some)|give\s+(me\s+)?(a\s+)?(list|examples)|which\s+(methods|techniques|approaches|strategies))\b/.test(q)) return "list";
+      if (/\b(what\s+is\s+|what\s+are\s+|what's\s+|defin|what\s+does\s+\w+\s+mean|meaning\s+of)\b/.test(q)) return "definition";
+      return "general";
+    }
+
+    function addMessage(text, role, meta = "", query = "") {
       const wrapper = document.createElement("div");
       wrapper.className = `message ${role}`;
-      wrapper.textContent = text;
+
+      if (role === "assistant") {
+        // Show answer shape badge + rendered markdown
+        const shape = query ? detectShape(query) : "general";
+        if (shape !== "general") {
+          const badge = document.createElement("span");
+          badge.className = "shape-badge";
+          badge.textContent = shape;
+          wrapper.appendChild(badge);
+        }
+        const mdDiv = document.createElement("div");
+        mdDiv.className = "md-content";
+        mdDiv.innerHTML = renderMarkdown(text);
+        wrapper.appendChild(mdDiv);
+      } else {
+        wrapper.textContent = text;
+      }
 
       if (meta) {
         const metaNode = document.createElement("div");
@@ -317,9 +457,15 @@
       }
     }
 
+    function escapeHtml(text) {
+      const el = document.createElement("span");
+      el.textContent = text;
+      return el.innerHTML;
+    }
+
     function renderSources(sources, retrievalUsed) {
       const sourceText = sources.length
-        ? sources.map((source) => `${source.filename} p.${source.page_number} c.${source.chunk_index}`).join("<br>")
+        ? sources.map((source) => `${escapeHtml(source.filename)} p.${source.page_number} c.${source.chunk_index}`).join("<br>")
         : "No sources returned.";
       return `
         <div>Retrieval used: ${retrievalUsed ? "yes" : "no"}</div>
@@ -416,7 +562,8 @@
         addMessage(
           data.answer,
           "assistant",
-          renderSources(data.sources || [], data.retrieval_used)
+          renderSources(data.sources || [], data.retrieval_used),
+          query
         );
       } catch (error) {
         addMessage("The query could not be completed.", "error", String(error));

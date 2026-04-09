@@ -126,9 +126,18 @@ async def generate_document_summary(chunks: Sequence[Chunk], *, sample_size: int
     return await chat_completion(messages, temperature=0.1, max_tokens=180)
 
 
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are a helpful assistant. Answer the user's question based ONLY "
+    "on the provided context. If the context does not contain enough "
+    "information, say so clearly."
+)
+
+
 async def generate_grounded_answer(
     query: str,
     chunks: Sequence[Chunk],
+    *,
+    system_prompt: str = _DEFAULT_SYSTEM_PROMPT,
 ) -> tuple[str, list[SourceReference]]:
     context_sections = []
     seen_sources: set[tuple[str, int, int]] = set()
@@ -160,11 +169,7 @@ async def generate_grounded_answer(
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are a helpful assistant. Answer the user's question based ONLY "
-                "on the provided context. If the context does not contain enough "
-                "information, say so clearly."
-            ),
+            "content": system_prompt,
         },
         {
             "role": "user",
