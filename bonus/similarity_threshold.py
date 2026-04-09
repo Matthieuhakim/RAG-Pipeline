@@ -7,7 +7,7 @@ instead of risking a hallucinated answer.
 
 from __future__ import annotations
 
-DEFAULT_SIMILARITY_THRESHOLD = 0.75
+DEFAULT_SIMILARITY_THRESHOLD = 0.60
 
 INSUFFICIENT_EVIDENCE_MESSAGE = (
     "I don't have sufficient evidence in the ingested documents to answer "

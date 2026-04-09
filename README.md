@@ -124,6 +124,13 @@ uvicorn app.main:app --reload
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000) to access the UI.
 
+**Running tests:**
+
+```bash
+pip install pytest pytest-asyncio
+python -m pytest tests/ -v
+```
+
 ## API Documentation
 
 ### `POST /ingest`
@@ -269,9 +276,9 @@ Additional features implemented in the `bonus/` package.
 
 ### Similarity Threshold & Insufficient Evidence (`bonus/similarity_threshold.py`)
 
-The pipeline refuses to answer when the best retrieved chunk does not meet a minimum cosine similarity threshold (default: 0.75), returning an "insufficient evidence" message instead of risking a hallucinated answer. The threshold is checked against the raw semantic search scores (cosine similarity, 0–1) before any rank fusion, since those scores reflect actual content relevance rather than rank position.
+The pipeline refuses to answer when the best retrieved chunk does not meet a minimum cosine similarity threshold (default: 0.60), returning an "insufficient evidence" message instead of risking a hallucinated answer. The threshold is checked against the raw semantic search scores (cosine similarity, 0–1) before any rank fusion, since those scores reflect actual content relevance rather than rank position.
 
-**Threshold calibration:** The default of 0.75 was empirically tuned for the `mistral-embed` model, which produces a high similarity floor (~0.63–0.70 even for unrelated content). Relevant queries consistently score 0.78+ while off-topic queries stay below 0.75. The threshold is configurable per call.
+**Threshold calibration:** The default of 0.60 was chosen as a balanced gate for the `mistral-embed` model. Relevant queries typically score 0.75+ while completely off-topic queries fall below 0.60. The threshold is configurable per call.
 
 **Example response (insufficient evidence):**
 

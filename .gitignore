@@ -1,3 +1,6 @@
 data/
 .env
 __pycache__/
+.cursor/
+.pytest_cache/
+*.pyc
